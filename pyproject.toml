@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "worktree"
+version = "0.1.0"
+description = "Worktree is a declarative runtime system for defining and synchronizing persistent Artifact graphs between memory and external backends, with explicit lifecycle control and composable state trees."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+
+dependencies = [
+    "pydantic>=2.13.4",
+]
+
+
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-html>=4.1.1"
+]
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/worktree"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+# Produce both human-readable and machine-readable reports
+addopts = "--html=report.html --self-contained-html --junitxml=report.xml"
+
+[tool.uv.workspace]
+members = []
+
+
