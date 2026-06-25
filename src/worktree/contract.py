@@ -20,29 +20,21 @@ class BaseWorktreeItem(Syncable):
         for claim in claims:
             match claim:
                 case ObjectClaim() as o:
-                    accessible = self._mounted_at.find(o.path)
-                    if accessible is None:
+                    obj = self._mounted_at.find_object(o.path)
+                    if obj is None:
                         obj = self._mounted_at.touch(o.path)
                         self.initialize_object(o.path, obj)
                         self.commit_object(o.path, obj)
                     else:
-                        if not isinstance(accessible, Object):
-                            raise WrongAccessibleTypeException(
-                                f"Expected object at '{o.path}', but found collection."
-                            )
-                        self.validate_object(o.path, accessible)
+                        self.validate_object(o.path, obj)
                 case CollectionClaim() as c:
-                    accessible = self._mounted_at.find(c.path)
-                    if accessible is None:
+                    coll = self._mounted_at.find_collection(c.path)
+                    if coll is None:
                         coll = self._mounted_at.mkdir(c.path)
                         self.initialize_collection(c.path, coll)
                         self.commit_collection(c.path, coll)
                     else:
-                        if not isinstance(accessible, Collection):
-                            raise WrongAccessibleTypeException(
-                                f"Expected collection at '{c.path}', but found object."
-                            )
-                        self.validate_collection(c.path, accessible)
+                        self.validate_collection(c.path, coll)
                 case _ as never: assert_never(never)
 
 
@@ -52,13 +44,13 @@ class BaseWorktreeItem(Syncable):
         for claim in claims:
             match claim:
                 case ObjectClaim() as o:
-                    accessible = self._mounted_at.find(o.path)
-                    assert isinstance(accessible, Object) # todo better exception
-                    self.commit_object(o.path, accessible)
+                    obj = self._mounted_at.find_object(o.path)
+                    assert obj is not None # todo better exception
+                    self.commit_object(o.path, obj)
                 case CollectionClaim() as c:
-                    accessible = self._mounted_at.find(c.path)
-                    assert isinstance(accessible, Collection) #todo ditto
-                    self.commit_collection(c.path, accessible)
+                    coll = self._mounted_at.find_collection(c.path)
+                    assert coll is not None #todo ditto
+                    self.commit_collection(c.path, coll)
                 case _ as never:
                     assert_never(never)
 
@@ -131,11 +123,7 @@ class Worktree(Syncable):
             value: WorktreeItem
             if issubclass(field.t, Worktree):
                 worktree_path = field.name
-                worktree_collection = root.find(worktree_path)
-                if worktree_collection is not None and not isinstance(worktree_collection, Collection):
-                    raise WrongAccessibleTypeException(
-                        f"Expected collection at '{worktree_path}', but found object."
-                    )
+                worktree_collection = root.find_collection(worktree_path)
                 if not worktree_collection:
                     worktree_collection = root.mkdir(worktree_path)
                 value = field.t(worktree_collection)

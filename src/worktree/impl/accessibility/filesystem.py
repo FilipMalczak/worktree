@@ -10,6 +10,7 @@ from worktree.mounting.accessible import (
     Accessible,
     WrongAccessibleTypeException,
     RootCollection,
+    AccessibleType,
 )
 
 
@@ -65,18 +66,31 @@ class FilesystemCollection(Collection):
             p.touch()
         return FilesystemObject(p)
 
-    def find(self, path: str | Path) -> Accessible | None:
+    def find(self, path: str | Path, accessible_type: AccessibleType = "any") -> Accessible | None:
         p = self._resolve_path(path)
         if not p.exists():
             return None
 
         if p.is_dir():
+            if accessible_type == "object":
+                raise WrongAccessibleTypeException(f"Expected object at '{p}', but found collection.")
             return FilesystemCollection(p)
         else:
+            if accessible_type == "collection":
+                raise WrongAccessibleTypeException(f"Expected collection at '{p}', but found object.")
             return FilesystemObject(p)
 
-    def exists(self, path: str | Path) -> bool:
-        return self._resolve_path(path).exists()
+    def exists(self, path: str | Path, accessible_type: AccessibleType = "any") -> bool:
+        p = self._resolve_path(path)
+        if not p.exists():
+            return False
+        if accessible_type == "any":
+            return True
+        elif accessible_type == "object":
+            return p.is_file()
+        elif accessible_type == "collection":
+            return p.is_dir()
+        return False
 
 
 class FilesystemObject(Object):

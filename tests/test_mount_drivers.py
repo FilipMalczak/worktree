@@ -74,18 +74,55 @@ def run_shared_driver_tests(root):
     # Find non-existent path
     assert root.find("non_existent") is None
 
-    # 7. Test touch on existing directory raises WrongAccessibleTypeException
+    # 7. Test find and exists with type filtering / specialized methods
+    # exists with type
+    assert root.exists("hello.txt", "object")
+    assert not root.exists("hello.txt", "collection")
+    assert root.exists("sub/folder", "collection")
+    assert not root.exists("sub/folder", "object")
+    assert not root.exists("non_existent", "object")
+    assert not root.exists("non_existent", "collection")
+
+    # exists_object / exists_collection
+    assert root.exists_object("hello.txt")
+    assert not root.exists_collection("hello.txt")
+    assert root.exists_collection("sub/folder")
+    assert not root.exists_object("sub/folder")
+
+    # find with type
+    assert root.find("hello.txt", "object") is not None
+    assert root.find("sub/folder", "collection") is not None
+
+    # find with mismatched type raises WrongAccessibleTypeException
+    with pytest.raises(WrongAccessibleTypeException):
+        root.find("hello.txt", "collection")
+
+    with pytest.raises(WrongAccessibleTypeException):
+        root.find("sub/folder", "object")
+
+    # find_object / find_collection
+    assert isinstance(root.find_object("hello.txt"), Object)
+    assert root.find_object("non_existent") is None
+    with pytest.raises(WrongAccessibleTypeException):
+        root.find_object("sub/folder")
+
+    assert isinstance(root.find_collection("sub/folder"), Collection)
+    assert root.find_collection("non_existent") is None
+    with pytest.raises(WrongAccessibleTypeException):
+        root.find_collection("hello.txt")
+
+    # 8. Test touch on existing directory raises WrongAccessibleTypeException
     with pytest.raises(WrongAccessibleTypeException):
         root.touch("sub/folder")
 
-    # 8. Test ls
+    # 9. Test ls
     items = list(root.ls())
     names = {item.name() for item in items}
     assert "hello.txt" in names
     assert "data.bin" in names
     assert "sub" in names
 
-    # 9. Test rm
+    # 10. Test rm
     # Remove file
     root.rm("data.bin")
     assert not root.exists("data.bin")

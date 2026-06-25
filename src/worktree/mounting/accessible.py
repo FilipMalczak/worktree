@@ -1,7 +1,9 @@
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 from worktree.decorators import not_implemented
+
+AccessibleType = Literal["object", "collection", "any"]
 
 
 class Named:
@@ -68,13 +70,29 @@ class AgnosticCollection(Named):
     def touch(self, path: str | Path) -> Object: ...
 
     @not_implemented
-    def find(self, path: str | Path) -> Accessible | None:
+    def find(self, path: str | Path, accessible_type: AccessibleType = "any") -> Accessible | None:
         """
         Finds the accessible resource (Object or Collection) at the given path.
         """
 
     @not_implemented
-    def exists(self, path: str | Path) -> bool: ...
+    def exists(self, path: str | Path, accessible_type: AccessibleType = "any") -> bool: ...
+
+    def find_object(self, path: str | Path) -> Object | None:
+        res = self.find(path, "object")
+        assert res is None or isinstance(res, Object)
+        return res
+
+    def find_collection(self, path: str | Path) -> Collection | None:
+        res = self.find(path, "collection")
+        assert res is None or isinstance(res, Collection)
+        return res
+
+    def exists_object(self, path: str | Path) -> bool:
+        return self.exists(path, "object")
+
+    def exists_collection(self, path: str | Path) -> bool:
+        return self.exists(path, "collection")
 
 
 class Collection(AgnosticCollection, Localizable):

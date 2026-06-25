@@ -1,57 +1,98 @@
-import os
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Iterable, Any, Dict
 
 from worktree.mounting.accessible import (
     MountDriver,
-    NoMountpoint,
     Collection,
     Object,
     Accessible,
     WrongAccessibleTypeException,
     RootCollection,
+    NoMountpoint,
+    AccessibleType,
 )
 
 
 class InMemoryStorage:
     def __init__(self):
-        self.nodes = {Path("."): {"type": "directory"}}
+        # A simple nested directory structure representation
+        # Directory node: {"type": "directory", "children": {name: node}}
+        # File node: {"type": "file", "content": bytes}
+        self.root = {"type": "directory", "children": {}}
 
-    def exists(self, path: Path) -> bool:
-        return path in self.nodes
+    def _resolve_parts(self, path: Path) -> list[str]:
+        # Normalize relative path components
+        parts = []
+        for part in path.parts:
+            if part in ("/", "\\", ".", ""):
+                continue
+            if part == "..":
+                if parts:
+                    parts.pop()
+            else:
+                parts.append(part)
+        return parts
 
-    def get_node(self, path: Path) -> dict | None:
-        return self.nodes.get(path)
+    def get_node(self, path: Path) -> Dict[str, Any] | None:
+        parts = self._resolve_parts(path)
+        current = self.root
+        for part in parts:
+            if current["type"] != "directory" or part not in current["children"]:
+                return None
+            current = current["children"][part]
+        return current
 
     def mkdir(self, path: Path):
-        parts = path.parts
-        for i in range(1, len(parts) + 1):
-            ancestor = Path(*parts[:i])
-            if ancestor not in self.nodes:
-                self.nodes[ancestor] = {"type": "directory"}
-            else:
-                if self.nodes[ancestor]["type"] != "directory":
-                    raise WrongAccessibleTypeException(
-                        f"Expected directory at '{ancestor}', but found a file."
-                    )
+        parts = self._resolve_parts(path)
+        current = self.root
+        for part in parts:
+            if part not in current["children"]:
+                current["children"][part] = {"type": "directory", "children": {}}
+            current = current["children"][part]
+            if current["type"] != "directory":
+                raise WrongAccessibleTypeException(f"Path segment '{part}' is a file, cannot create directory.")
 
-    def rm(self, path: Path):
-        keys_to_remove = [
-            k for k in self.nodes if k == path or path in k.parents
-        ]
-        for k in keys_to_remove:
-            del self.nodes[k]
+    def touch(self, path: Path) -> Dict[str, Any]:
+        parts = self._resolve_parts(path)
+        if not parts:
+            raise WrongAccessibleTypeException("Cannot touch root path.")
+        
+        # Ensure parent directory exists
+        parent_parts = parts[:-1]
+        current = self.root
+        for part in parent_parts:
+            if part not in current["children"]:
+                current["children"][part] = {"type": "directory", "children": {}}
+            current = current["children"][part]
+            if current["type"] != "directory":
+                raise WrongAccessibleTypeException(f"Path segment '{part}' is a file, cannot create parent directory.")
+        
+        filename = parts[-1]
+        if filename in current["children"]:
+            node = current["children"][filename]
+            if node["type"] == "directory":
+                raise WrongAccessibleTypeException(f"Path '{path}' is a directory, cannot touch as file.")
+        else:
+            current["children"][filename] = {"type": "file", "content": b""}
+            node = current["children"][filename]
+        return node
 
-    def write_file(
-        self, path: Path, content: str | bytes, file_type: Literal["text", "binary"]
-    ):
-        self.nodes[path] = {"type": file_type, "content": content}
-
-    def read_file(self, path: Path) -> str | bytes:
-        node = self.nodes.get(path)
-        if node is None or node["type"] not in ("text", "binary"):
-            raise FileNotFoundError(f"No file at '{path}'")
-        return node["content"]
+    def delete(self, path: Path):
+        parts = self._resolve_parts(path)
+        if not parts:
+            # Cannot delete root
+            return
+        
+        parent_parts = parts[:-1]
+        current = self.root
+        for part in parent_parts:
+            if current["type"] != "directory" or part not in current["children"]:
+                return
+            current = current["children"][part]
+            
+        filename = parts[-1]
+        if filename in current["children"]:
+            del current["children"][filename]
 
 
 class InMemoryCollection(Collection):
@@ -63,28 +104,32 @@ class InMemoryCollection(Collection):
         return self._path
 
     def name(self) -> str:
-        return self._path.name
+        # For root path, name is empty, but let's handle it gracefully
+        return self._path.name or ""
 
     def _resolve_path(self, path: str | Path) -> Path:
         p = Path(path)
         if p.is_absolute():
             p = p.relative_to(p.anchor)
-        resolved = Path(os.path.normpath(self._path / p))
-        if resolved.parts and resolved.parts[0] == "..":
-            return Path(".")
+        resolved = (self._path / p).resolve()
+        # InMemory path resolution should be relative to workspace or mock root
+        # We can just return resolved path normalized
         return resolved
 
     def ls(self) -> Iterable[Accessible]:
-        for k, node in self._storage.nodes.items():
-            if k.parent == self._path and k != self._path:
-                if node["type"] == "directory":
-                    yield InMemoryCollection(self._storage, k)
-                elif node["type"] in ("text", "binary"):
-                    yield InMemoryObject(self._storage, k)
+        node = self._storage.get_node(self._path)
+        if not node or node["type"] != "directory":
+            return
+        for name, child_node in node["children"].items():
+            child_path = self._path / name
+            if child_node["type"] == "directory":
+                yield InMemoryCollection(self._storage, child_path)
+            else:
+                yield InMemoryObject(self._storage, child_path)
 
     def rm(self, path: str | Path):
         p = self._resolve_path(path)
-        self._storage.rm(p)
+        self._storage.delete(p)
 
     def mkdir(self, path: str | Path) -> Collection:
         p = self._resolve_path(path)
@@ -93,30 +138,36 @@ class InMemoryCollection(Collection):
 
     def touch(self, path: str | Path) -> Object:
         p = self._resolve_path(path)
-        if self._storage.exists(p):
-            node = self._storage.get_node(p)
-            if node["type"] == "directory":
-                raise WrongAccessibleTypeException(
-                    f"Path '{p}' is a directory, cannot touch as file."
-                )
-        else:
-            self._storage.mkdir(p.parent)
-            self._storage.write_file(p, "", "text")
+        self._storage.touch(p)
         return InMemoryObject(self._storage, p)
 
-    def find(self, path: str | Path) -> Accessible | None:
+    def find(self, path: str | Path, accessible_type: AccessibleType = "any") -> Accessible | None:
         p = self._resolve_path(path)
         node = self._storage.get_node(p)
         if node is None:
             return None
 
         if node["type"] == "directory":
+            if accessible_type == "object":
+                raise WrongAccessibleTypeException(f"Expected object at '{p}', but found collection.")
             return InMemoryCollection(self._storage, p)
         else:
+            if accessible_type == "collection":
+                raise WrongAccessibleTypeException(f"Expected collection at '{p}', but found object.")
             return InMemoryObject(self._storage, p)
 
-    def exists(self, path: str | Path) -> bool:
-        return self._storage.exists(self._resolve_path(path))
+    def exists(self, path: str | Path, accessible_type: AccessibleType = "any") -> bool:
+        p = self._resolve_path(path)
+        node = self._storage.get_node(p)
+        if node is None:
+            return False
+        if accessible_type == "any":
+            return True
+        elif accessible_type == "object":
+            return node["type"] != "directory"
+        elif accessible_type == "collection":
+            return node["type"] == "directory"
+        return False
 
 
 class InMemoryObject(Object):
@@ -127,26 +178,27 @@ class InMemoryObject(Object):
     def path(self) -> Path:
         return self._path
 
+    def _get_node(self):
+        node = self._storage.get_node(self._path)
+        if not node or node["type"] == "directory":
+            raise FileNotFoundError(f"No in-memory file at {self._path}")
+        return node
+
     def read_text(self) -> str:
-        content = self._storage.read_file(self._path)
-        if isinstance(content, bytes):
-            return content.decode("utf-8")
-        return content
+        return self._get_node()["content"].decode("utf-8")
 
     def write_text(self, data: str):
-        self._storage.write_file(self._path, data, "text")
+        node = self._storage.touch(self._path)
+        node["content"] = data.encode("utf-8")
 
     def read_binary(self) -> bytes:
-        content = self._storage.read_file(self._path)
-        if isinstance(content, str):
-            return content.encode("utf-8")
-        return content
+        return self._get_node()["content"]
 
     def write_binary(self, data: bytes):
-        self._storage.write_file(self._path, data, "binary")
+        node = self._storage.touch(self._path)
+        node["content"] = data
 
 
 class InMemoryMountDriver(MountDriver[NoMountpoint]):
     def mount(self, mountpoint: NoMountpoint) -> RootCollection:
-        storage = InMemoryStorage()
-        return InMemoryCollection(storage, Path("."))
+        return InMemoryCollection(InMemoryStorage(), Path("/"))
