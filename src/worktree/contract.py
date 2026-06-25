@@ -54,8 +54,17 @@ class BaseWorktreeItem(Syncable):
                 case _ as never:
                     assert_never(never)
 
+    # TODO: Enhance class post init (e.g., via metaclass or __init_subclass__) to decorate
+    # the (initialize|validate|commit)_(object|collection) methods to assert they are called on an owned claim.
     @not_implemented
-    def ownership_claims(self) -> list[Claim]: ...
+    def ownership_claims(self) -> list[Claim]:
+        """
+        Declare ownership claims of this item.
+
+        The (initialize|validate|commit)_(object|collection) methods should assume that they
+        are called on an owned claim returned by this method.
+        """
+        ...
 
     @not_implemented
     def initialize_object(self, path: Path, obj: Object): ...
