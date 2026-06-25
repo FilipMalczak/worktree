@@ -5,7 +5,7 @@ from typing import Self, ClassVar
 from pydantic import BaseModel, TypeAdapter
 
 from worktree.contract import Artifact
-from worktree.mounting.accessible import Collection, Object, TextObject
+from worktree.mounting.accessible import Collection, Object
 from worktree.mounting.claim import Claim, ObjectClaim
 from worktree.decorators import unreachable_worktree_action
 
@@ -55,7 +55,7 @@ class PydanticArtifact(BaseModel, Artifact[Self]):
             ObjectClaim(path=Path(type(self).mount_path))
         ]
 
-    def initialize_object(self, path: Path, obj: TextObject):
+    def initialize_object(self, path: Path, obj: Object):
         """
         Initialize a newly created object.
 
@@ -64,20 +64,20 @@ class PydanticArtifact(BaseModel, Artifact[Self]):
         """
         # TODO: Enhance class post init to decorate this method to assert it is called on an owned claim.
 
-    def validate_object(self, path: Path, obj: TextObject):
+    def validate_object(self, path: Path, obj: Object):
         """
         Read the JSON object and validate/update the in-memory model fields with the object's values.
         This method assumes it is called on an owned claim.
         """
         # TODO: Enhance class post init to decorate this method to assert it is called on an owned claim.
-        txt = obj.read()
+        txt = obj.read_text()
         adapter = TypeAdapter(type(self))
         validated = adapter.validate_json(txt)
         fields = validated.model_dump(mode="python")
         for name, val in fields.items():
             setattr(self, name, val)
 
-    def commit_object(self, path: Path, obj: TextObject):
+    def commit_object(self, path: Path, obj: Object):
         """
         Serialize the in-memory model fields to JSON and write them back to the persistent object.
         This method assumes it is called on an owned claim.
@@ -85,7 +85,7 @@ class PydanticArtifact(BaseModel, Artifact[Self]):
         # TODO: Enhance class post init to decorate this method to assert it is called on an owned claim.
         data = self.model_dump(mode="json")
         txt = json.dumps(data)
-        obj.write(txt)
+        obj.write_text(txt)
 
     @unreachable_worktree_action(since="PydanticArtifact only claims objects, not collections")
     def initialize_collection(self, path: Path, collection: Collection): ...
@@ -101,5 +101,3 @@ class PydanticArtifact(BaseModel, Artifact[Self]):
         Return the in-memory model instance itself.
         """
         return self
-
-

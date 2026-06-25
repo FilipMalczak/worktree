@@ -24,14 +24,14 @@ def test_pydantic_artifact_creation_and_initial_sync():
     config.sync()
     assert root.exists("config.json")
     
-    data = json.loads(root.find("config.json", "text").read())
+    data = json.loads(root.find("config.json").read_text())
     assert data == {"username": "default_user", "port": 8080}
 
 
 def test_pydantic_artifact_sync_from_existing_object():
     driver = InMemoryMountDriver()
     root = driver.mount(NoMountpoint())
-    root.touch("config.json", "text").write('{"username": "admin", "port": 9000}')
+    root.touch("config.json").write_text('{"username": "admin", "port": 9000}')
     
     config = SampleConfig(root)
     config.sync()
@@ -49,14 +49,14 @@ def test_pydantic_artifact_commit_changes():
     config.port = 443
     config.commit()
     
-    data = json.loads(root.find("config.json", "text").read())
+    data = json.loads(root.find("config.json").read_text())
     assert data == {"username": "new_user", "port": 443}
 
 
 def test_pydantic_artifact_validation_error():
     driver = InMemoryMountDriver()
     root = driver.mount(NoMountpoint())
-    root.touch("config.json", "text").write('{"username": "admin", "port": "not-an-integer"}')
+    root.touch("config.json").write_text('{"username": "admin", "port": "not-an-integer"}')
     
     config = SampleConfig(root)
     with pytest.raises(ValidationError):
