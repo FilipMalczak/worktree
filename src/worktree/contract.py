@@ -4,6 +4,7 @@ from typing import get_origin, NamedTuple, Iterable, Any, assert_never
 from worktree.mounting.accessible import RootCollection, Object, Collection
 from worktree.syncable.protocol import Syncable
 from worktree.mounting.claim import ObjectClaim, Claim, CollectionClaim
+from worktree.decorators import not_implemented
 
 
 #todo better name for this module (its not just a contract anymore)
@@ -51,15 +52,25 @@ class BaseWorktreeItem(Syncable):
                 case _ as never:
                     assert_never(never)
 
+    @not_implemented
     def ownership_claims(self) -> list[Claim]: ...
 
+    @not_implemented
     def initialize_object(self, path: Path, obj: Object): ...
+
+    @not_implemented
     def initialize_collection(self, path: Path, collection: Collection): ...
 
+    @not_implemented
     def validate_object(self, path: Path, obj: Object): ...
+
+    @not_implemented
     def validate_collection(self, path: Path, collection: Collection): ...
 
+    @not_implemented
     def commit_object(self, path: Path, obj: Object): ...
+
+    @not_implemented
     def commit_collection(self, path: Path, collection: Collection): ...
 
 
@@ -67,12 +78,14 @@ class Artifact[Value](BaseWorktreeItem):
     """
     In-memory piece of persistent data.
     """
+    @not_implemented
     def value(self) -> Value: ...
 
 class Anchor[Handle](BaseWorktreeItem):
     """
     Persistent data with no direct in-memory representation (directory, DB, etc).
     """
+    @not_implemented
     def handle(self) -> Handle: ...
 
 class Worktree(Syncable):
