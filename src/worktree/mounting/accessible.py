@@ -121,7 +121,11 @@ Accessible = Object | Collection
 
 RootCollection = AgnosticCollection
 
-#fixme class name, param name, arg name - all suck; rethink
-class AccessibilityProtocol[Details]:
+class NoMountpoint:
+    """
+    If there are no details required to mount, use this token class.
+    """
+
+class MountDriver[Mountpoint]:
     @not_implemented
-    def attach(self, mountpoint: Details) -> RootCollection: ...
+    def mount(self, mountpoint: Mountpoint) -> RootCollection: ...
