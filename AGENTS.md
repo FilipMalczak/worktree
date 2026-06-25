@@ -7,6 +7,8 @@
 We do not use `typing.Protocol`s or `abc.ABC`s in the contract. 
 Instead, we use plain Python classes and decorate abstract methods with `@not_implemented`.
 
+Prefer `match` statements over `if`s. Rule of thumb: if you're using `elif`, you should be using `match` instead; otherwise, you're good.
+
 ## Operations
 
 We're using `uv`.
