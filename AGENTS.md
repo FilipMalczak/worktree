@@ -9,6 +9,11 @@ Instead, we use plain Python classes and decorate abstract methods with `@not_im
 
 Prefer `match` statements over `if`s. Rule of thumb: if you're using `elif`, you should be using `match` instead; otherwise, you're good.
 
+## Context Gathering
+
+Whenever gathering context or starting a task on this repository, you MUST read [SUMMARY.md](file:///home/filip/repos/worktree/SUMMARY.md) to understand the high-level architecture, contracts, modules, and synchronization lifecycle.
+It's updated periodically, so it might be slightly outdated (more likely to be incomplete than incorrect, but it should give you a good staring point overall.
+
 ## Operations
 
 We're using `uv`.
