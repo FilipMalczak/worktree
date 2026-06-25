@@ -58,6 +58,7 @@ Provide proposed commit message and scope (list of files to commit) at that poin
 When testing mid-work, you're allowed to use any set of test case/suites/files.
 
 When testing because you believe you've finished the work, ALWAYS run the whole `./tests/` suite.
+If planning, verification plan MUST ALWAYS include running `uv run pytest` without any exclusions.
 NEVER stop working unless the whole `./tests` suite is green.
 
 NEVER remove test cases or suites without explicit approval.  
