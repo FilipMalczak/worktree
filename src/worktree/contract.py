@@ -109,6 +109,7 @@ class Worktree(Syncable):
             # todo
             # if tree.field is a dataclass/pydantic Field -> resolve default
             # if tree.field has a value at all -> use it as default
+            value: WorktreeItem
             if issubclass(field.t, Worktree):
                 worktree_path = field.name
                 worktree_collection = root.find(worktree_path, Collection)
@@ -133,9 +134,9 @@ class Worktree(Syncable):
             item.commit()
 
 
-class TypedField(NamedTuple):
+class TypedField[T: WorktreeItem](NamedTuple):
     name: str
-    t: type
+    t: type[T]
     """
     Resolved type that you can instantiate
     """
@@ -144,7 +145,7 @@ class TypedField(NamedTuple):
     For simple cases source==t; generally - the type alias or something like that used to originally annotate the field 
     """
 
-def get_worktree_items(scanned_type: type) -> Iterable[WorktreeItem]:
+def get_worktree_items(scanned_type: type) -> Iterable[TypedField]:
     for field, t in scanned_type.__annotations__.items():
         origin = get_origin(t)
         cls = origin if origin is not None else t
