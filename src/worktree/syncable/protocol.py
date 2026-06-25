@@ -1,6 +1,8 @@
 from typing import Protocol, runtime_checkable
 
 
+#todo move this to worktree package as standalone module
+
 @runtime_checkable
 class Syncable(Protocol):
     def sync(self):

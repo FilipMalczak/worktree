@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from src.worktree.contract import Worktree
+from worktree.contract import Worktree
 
 
 class Mounter(Protocol):

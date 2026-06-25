@@ -1,17 +1,75 @@
-from typing import Self, get_origin, NamedTuple, Iterable, Any
+from pathlib import Path
+from typing import get_origin, NamedTuple, Iterable, Any, assert_never
 
-from src.worktree.mounting.accessible import RootCollection
-from src.worktree.syncable.base import BaseSyncable
-from src.worktree.syncable.protocol import Syncable
+from worktree.mounting.accessible import RootCollection, Object, Collection
+from worktree.syncable.protocol import Syncable
+from worktree.mounting.claim import ObjectClaim, Claim, CollectionClaim
 
 
-class Artifact[Value=Self](BaseSyncable):
+#todo better name for this module (its not just a contract anymore)
+
+
+class BaseWorktreeItem(Syncable):
+    def __init__(self, mounted_at: RootCollection):
+        self._mounted_at = mounted_at
+
+
+    def sync(self):
+        claims = self.ownership_claims()
+        for claim in claims:
+            match claim:
+                case ObjectClaim() as o:
+                    obj = self._mounted_at.find(o.path, o.object_type)
+                    if obj is None:
+                        obj = self._mounted_at.touch(o.path, o.object_type)
+                        self.initialize_object(o.path, obj)
+                    else:
+                        self.validate_object(o.path, obj)
+                case CollectionClaim() as c:
+                    coll = self._mounted_at.find(c.path, Collection)
+                    if coll is None:
+                        coll = self._mounted_at.touch(c.path, Collection)
+                        self.initialize_collection(c.path, coll)
+                    else:
+                        self.validate_collection(c.path, coll)
+                case _ as never: assert_never(never)
+
+
+
+    def commit(self):
+        claims = self.ownership_claims()
+        for claim in claims:
+            match claim:
+                case ObjectClaim() as o:
+                    obj = self._mounted_at.find(o.path, o.object_type)
+                    assert obj is not None # todo better exception
+                    self.commit_object(o.path, obj)
+                case CollectionClaim() as c:
+                    coll = self._mounted_at.find(c.path, Collection)
+                    assert coll is not None #todo ditto
+                    self.commit_collection(c.path, coll)
+                case _ as never:
+                    assert_never(never)
+
+    def ownership_claims(self) -> list[Claim]: ...
+
+    def initialize_object(self, path: Path, obj: Object): ...
+    def initialize_collection(self, path: Path, collection: Collection): ...
+
+    def validate_object(self, path: Path, obj: Object): ...
+    def validate_collection(self, path: Path, collection: Collection): ...
+
+    def commit_object(self, path: Path, obj: Object): ...
+    def commit_collection(self, path: Path, collection: Collection): ...
+
+
+class Artifact[Value](BaseWorktreeItem):
     """
     In-memory piece of persistent data.
     """
     def value(self) -> Value: ...
 
-class Anchor[Handle](BaseSyncable):
+class Anchor[Handle](BaseWorktreeItem):
     """
     Persistent data with no direct in-memory representation (directory, DB, etc).
     """
@@ -29,7 +87,7 @@ class Worktree(Syncable):
     THIS MIGHT LEAD TO STATE LOSS! But that's a design choice. Use this library accordingly or suffer the consequences.
 
     This is part of the contract, but also provides the default behavior. It is not expected for this class to have
-    subtypes other than business ones (no specialized behavor expected).
+    subtypes other than business ones (no specialized behavior expected).
     """
 
     def __init__(self, root: RootCollection):
@@ -39,9 +97,13 @@ class Worktree(Syncable):
             # if tree.field is a dataclass/pydantic Field -> resolve default
             # if tree.field has a value at all -> use it as default
             if issubclass(field.t, Worktree):
-                value = field.t(root)
+                worktree_path = field.name
+                worktree_collection = root.find(worktree_path, Collection)
+                if not worktree_collection:
+                    worktree_collection = root.mkdir(worktree_path)
+                value = field.t(worktree_collection)
             else:
-                value = field.t()
+                value = field.t(root)
             values[field] = value
             setattr(self, field.name, value)
         for field in get_worktree_items(type(self)):
@@ -66,14 +128,14 @@ class TypedField(NamedTuple):
     """
     source: Any
     """
-    For simple cases source==t; generally - the type alias or something like that used to originally represent the field 
+    For simple cases source==t; generally - the type alias or something like that used to originally annotate the field 
     """
 
 def get_worktree_items(scanned_type: type) -> Iterable[WorktreeItem]:
     for field, t in scanned_type.__annotations__.items():
         origin = get_origin(t)
         cls = origin if origin is not None else t
-        if isinstance(scanned_type, type) and issubclass(cls, WorktreeItem):
+        if isinstance(cls, type) and issubclass(cls, WorktreeItem):
             yield TypedField(field, cls, t)
 
 #todo poor name for the union
