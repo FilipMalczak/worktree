@@ -24,6 +24,7 @@ class BaseWorktreeItem(Syncable):
                     if obj is None:
                         obj = self._mounted_at.touch(o.path, o.object_type)
                         self.initialize_object(o.path, obj)
+                        self.commit_object(o.path, obj)
                     else:
                         self.validate_object(o.path, obj)
                 case CollectionClaim() as c:
@@ -31,6 +32,7 @@ class BaseWorktreeItem(Syncable):
                     if coll is None:
                         coll = self._mounted_at.touch(c.path, Collection)
                         self.initialize_collection(c.path, coll)
+                        self.commit_collection(c.path, coll)
                     else:
                         self.validate_collection(c.path, coll)
                 case _ as never: assert_never(never)
