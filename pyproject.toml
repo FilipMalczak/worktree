@@ -1,13 +1,15 @@
 [build-system]
-requires = ["hatchling"]
+requires = [
+  "hatchling>=1.22",
+  "hatch-vcs>=0.4",
+]
 build-backend = "hatchling.build"
 
 [project]
 name = "worktree"
-version = "0.1.0"
 description = "Worktree is a declarative runtime system for defining and synchronizing persistent Artifact graphs between memory and external backends, with explicit lifecycle control and composable state trees."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 keywords = ["worktree", "declarative", "persistence", "agentic-systems", "pydantic"]
 classifiers = [
@@ -15,8 +17,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
@@ -24,6 +24,8 @@ classifiers = [
 dependencies = [
     "pydantic>=2.13.4",
 ]
+
+dynamic = ["version"]
 
 [project.urls]
 Repository = "https://github.com/FilipMalczak/worktree"
@@ -37,8 +39,15 @@ dev = [
 ]
 
 
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/worktree"]
+
+[tool.hatch.build]
+only-packages = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
