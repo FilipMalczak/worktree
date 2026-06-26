@@ -1,0 +1,54 @@
+name: On commit
+
+on: [push]
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  testing:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        python-version: [
+          "3.12",
+          "3.13",
+          "3.14"
+        ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and set the Python version to ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: uv sync
+        run: uv sync
+
+      - name: Run tests
+        run: uv run pytest -vv # this project has no sensitive data in tests, so we can be as verbose as we want
+
+      - name: Publish test report
+        uses: dorny/test-reporter@v2
+        if: ${{ !cancelled() }}
+        with:
+          name: Unit tests (${{matrix.os}}, ${{ matrix.python-version }}, ${{ github.event_name }})
+          path: ./report.xml
+          reporter: python-xunit
+
+      - name: Upload XML test report
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: test_report_${{matrix.os}}__${{ matrix.python-version }}__${{ github.event_name }}.xml
+          path: ./report.xml
+
+      - name: Upload HTML test report
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: test_report_${{matrix.os}}__${{ matrix.python-version }}__${{ github.event_name }}.html
+          path: ./report.html
