@@ -18,7 +18,7 @@ class SampleConfig(PydanticArtifact):
 def test_pydantic_artifact_creation_and_initial_sync():
     driver = InMemoryMountDriver()
     root = driver.mount(NoMountpoint())
-    config = SampleConfig(root)
+    config = SampleConfig("config", root)
     
     assert not root.exists("config.json")
     config.sync()
@@ -33,7 +33,7 @@ def test_pydantic_artifact_sync_from_existing_object():
     root = driver.mount(NoMountpoint())
     root.touch("config.json").write_text('{"username": "admin", "port": 9000}')
     
-    config = SampleConfig(root)
+    config = SampleConfig("config", root)
     config.sync()
     assert config.username == "admin"
     assert config.port == 9000
@@ -42,7 +42,7 @@ def test_pydantic_artifact_sync_from_existing_object():
 def test_pydantic_artifact_commit_changes():
     driver = InMemoryMountDriver()
     root = driver.mount(NoMountpoint())
-    config = SampleConfig(root)
+    config = SampleConfig("config", root)
     config.sync()
     
     config.username = "new_user"
@@ -58,7 +58,7 @@ def test_pydantic_artifact_validation_error():
     root = driver.mount(NoMountpoint())
     root.touch("config.json").write_text('{"username": "admin", "port": "not-an-integer"}')
     
-    config = SampleConfig(root)
+    config = SampleConfig("config", root)
     with pytest.raises(ValidationError):
         config.sync()
 
@@ -66,7 +66,7 @@ def test_pydantic_artifact_validation_error():
 def test_pydantic_artifact_unreachable_collection_methods():
     driver = InMemoryMountDriver()
     root = driver.mount(NoMountpoint())
-    config = SampleConfig(root)
+    config = SampleConfig("config", root)
     
     with pytest.raises(UnreachableWorktreeAction):
         config.initialize_collection(Path("config.json"), root)

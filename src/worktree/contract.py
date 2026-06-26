@@ -11,8 +11,13 @@ from worktree.decorators import not_implemented
 
 
 class BaseWorktreeItem(Syncable):
-    def __init__(self, mounted_at: RootCollection):
+    def __init__(self, item_name: str, mounted_at: RootCollection):
         self._mounted_at = mounted_at
+        self._item_name = item_name
+
+    @property
+    def item_name(self) -> str:
+        return self._item_name
 
 
     def sync(self):
@@ -128,7 +133,7 @@ class Worktree(Syncable):
                     worktree_collection = root.mkdir(worktree_path)
                 value = field.t(worktree_collection)
             else:
-                value = field.t(root)
+                value = field.t(field.name, root)
             values[field] = value
             setattr(self, field.name, value)
         for field in get_worktree_items(type(self)):

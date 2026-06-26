@@ -25,7 +25,7 @@ class PydanticArtifact(BaseModel, Artifact[Self]):
     """
     mount_path: ClassVar[str]
 
-    def __init__(self, mounted_at: Collection | None = None, **kwargs):
+    def __init__(self, item_name: str, mounted_at: Collection | None = None, **kwargs):
         """
         Initialize the Pydantic model and register it within the worktree collection.
 
@@ -33,7 +33,7 @@ class PydanticArtifact(BaseModel, Artifact[Self]):
         """
         BaseModel.__init__(self, **kwargs)
         if mounted_at is not None:
-            Artifact.__init__(self, mounted_at)
+            Artifact.__init__(self, item_name, mounted_at)
 
     # 2. Enforce the rule at runtime
     def __init_subclass__(cls, **kwargs):
@@ -71,8 +71,14 @@ class PydanticArtifact(BaseModel, Artifact[Self]):
         """
         # TODO: Enhance class post init to decorate this method to assert it is called on an owned claim.
         txt = obj.read_text()
-        adapter = TypeAdapter(type(self))
-        validated = adapter.validate_json(txt)
+        cls = type(self)
+        original_init = cls.__init__
+        cls.__init__ = BaseModel.__init__
+        try:
+            adapter = TypeAdapter(cls)
+            validated = adapter.validate_json(txt)
+        finally:
+            cls.__init__ = original_init
         fields = validated.model_dump(mode="python")
         for name, val in fields.items():
             setattr(self, name, val)
