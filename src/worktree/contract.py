@@ -4,7 +4,7 @@ from typing import get_origin, NamedTuple, Iterable, Any, assert_never
 from worktree.mounting.accessible import RootCollection, Object, Collection, WrongAccessibleTypeException
 from worktree.syncable.protocol import Syncable
 from worktree.mounting.claim import ObjectClaim, Claim, CollectionClaim
-from worktree.decorators import not_implemented
+from worktree.decorators import not_implemented, unreachable_worktree_action
 
 
 #todo better name for this module (its not just a contract anymore)
@@ -103,6 +103,76 @@ class Anchor[Handle](BaseWorktreeItem):
     """
     @not_implemented
     def handle(self) -> Handle: ...
+
+class LayoutAnchor(Anchor[Collection]):
+    """
+    A nestable collection layout organizer.
+    
+    Subclass of Anchor whose handle is the collection it manages.
+    Declares directory structure via type annotations and inner classes.
+    The collection name is derived from the field name on the parent (item_name).
+    Not a Worktree — no sync/commit isolation. Delegates to children.
+    Can be used bare (empty directory stub) or subclassed (with children).
+    """
+
+    def __init__(self, item_name: str, mounted_at: RootCollection):
+        super().__init__(item_name, mounted_at)
+        self._items: dict = {}
+        self._collection: Collection | None = None
+
+    def ownership_claims(self) -> list[Claim]:
+        return [CollectionClaim(path=Path(self._item_name))]
+
+    def initialize_collection(self, path: Path, collection: Collection):
+        self._collection = collection
+        self._discover_and_mount_children(collection)
+
+    def validate_collection(self, path: Path, collection: Collection):
+        self._collection = collection
+        self._discover_and_mount_children(collection)
+
+    def commit_collection(self, path: Path, collection: Collection):
+        pass  # directory itself has nothing to persist
+
+    def _discover_and_mount_children(self, collection: RootCollection):
+        if self._items:
+            return
+        for field in get_worktree_items(type(self)):
+            if issubclass(field.t, Worktree):
+                wt_coll = collection.find_collection(field.name)
+                if not wt_coll:
+                    wt_coll = collection.mkdir(field.name)
+                value = field.t(wt_coll)
+              # Prefer match statement over if where applicable:
+              # "Prefer `match` statements over `ifs`. Rule of thumb: if you're using `elif`, you should be using `match` instead; otherwise, you're good."
+              # Since there's no `elif` here, a simple `if` is fine.
+            else:
+                value = field.t(field.name, collection)
+            self._items[field] = value
+            setattr(self, field.name, value)
+
+    def sync(self):
+        super().sync()  # ensures dir exists -> initialize/validate -> children mounted
+        for item in self._items.values():
+            item.sync()
+
+    def commit(self):
+        for item in self._items.values():
+            item.commit()
+        super().commit()
+
+    def handle(self) -> Collection:
+        assert self._collection is not None
+        return self._collection
+
+    @unreachable_worktree_action(since="LayoutAnchor only claims collections, not objects")
+    def initialize_object(self, path: Path, obj: Object): ...
+
+    @unreachable_worktree_action(since="LayoutAnchor only claims collections, not objects")
+    def validate_object(self, path: Path, obj: Object): ...
+
+    @unreachable_worktree_action(since="LayoutAnchor only claims collections, not objects")
+    def commit_object(self, path: Path, obj: Object): ...
 
 class Worktree(Syncable):
     """
