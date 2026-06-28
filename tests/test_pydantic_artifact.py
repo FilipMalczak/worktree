@@ -10,7 +10,6 @@ from worktree.decorators import UnreachableWorktreeAction
 
 
 class SampleConfig(PydanticArtifact):
-    mount_path = "config.json"
     username: str = "default_user"
     port: int = 8080
 
@@ -84,3 +83,5 @@ def test_pydantic_artifact_unreachable_collection_methods():
     assert ":raise UnreachableWorktreeAction:" in config.validate_collection.__doc__
     assert "Unreachable method since PydanticArtifact only claims objects, not collections" in config.commit_collection.__doc__
     assert ":raise UnreachableWorktreeAction:" in config.commit_collection.__doc__
+
+

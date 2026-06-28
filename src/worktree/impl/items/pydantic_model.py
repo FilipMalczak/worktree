@@ -1,58 +1,54 @@
 import json
 from pathlib import Path
-from typing import Self, ClassVar
-
+from typing import Self
+ 
 from pydantic import BaseModel, TypeAdapter
-
+ 
 from worktree.contract import Artifact
 from worktree.mounting.accessible import Collection, Object
 from worktree.mounting.claim import Claim, ObjectClaim
 from worktree.decorators import unreachable_worktree_action
-
-
+ 
+ 
 class PydanticArtifact(BaseModel, Artifact[Self]):
     """
     An in-memory piece of persistent data represented as a Pydantic model and backed by a single object with JSON contents.
-
+ 
+    The mount path of the artifact is derived solely from the item name suffixed with `.json`.
+ 
     Subclasses must define:
-        1. `mount_path: ClassVar[str]`: The relative path/filename of the JSON object within the collection.
-        2. Pydantic fields with default values or default factories.
-
+        1. Pydantic fields with default values or default factories.
+ 
     Important Constraints:
         - All defined fields MUST have default values or default factories. Direct instantiation using field values
           (e.g., `MyModel(field=val)`) is not supported. Instead, instances are instantiated via `MyModel(mounted_at)`
           and initialized with defaults, which are then synchronized with the storage back-end.
     """
-    mount_path: ClassVar[str]
-
+ 
     def __init__(self, item_name: str, mounted_at: Collection | None = None, **kwargs):
         """
         Initialize the Pydantic model and register it within the worktree collection.
-
+ 
         Accepts arbitrary keyword arguments for Pydantic cooperative inheritance validation and model reconstruction.
         """
         BaseModel.__init__(self, **kwargs)
+        self._item_name = item_name
         if mounted_at is not None:
             Artifact.__init__(self, item_name, mounted_at)
 
-    # 2. Enforce the rule at runtime
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-
-        # Check if the subclass defined the required variable
-        if not hasattr(cls, 'mount_path'):
-            raise NotImplementedError(
-                f"Error: Subclass '{cls.__name__}' must define a `mount_path` class-level variable!"
-            )
-        # TODO: Enhance subclass post-init to decorate initialize_object, validate_object, and commit_object
-        # to dynamically assert that they are called with a path matching the owned claims.
+    # TODO: Set up subclass post-init to decorate initialize_object, validate_object, and commit_object
+    #  to dynamically assert that they are called with a path matching the owned claims.
+ 
+    @property
+    def artifact_mount_path(self) -> str:
+        return f"{self.item_name}.json"
 
     def ownership_claims(self) -> list[Claim]:
         """
-        Declare ownership of the object at the configured `mount_path`.
+        Declare ownership of the object at the mount path.
         """
         return [
-            ObjectClaim(path=Path(type(self).mount_path))
+            ObjectClaim(path=Path(self.artifact_mount_path))
         ]
 
     def initialize_object(self, path: Path, obj: Object):

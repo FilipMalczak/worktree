@@ -60,7 +60,7 @@ def test_nested_layout_anchors_e2e():
     assert root.exists("parent")
     assert root.exists("parent/nested")
     assert root.exists("parent/nested/child.json")
-    assert root.exists("parent/child.json")
+    assert root.exists("parent/direct_child.json")
     
     assert tree.parent.direct_child.value_field == "default_val"
     assert tree.parent.nested.child.value_field == "default_val"
@@ -74,7 +74,7 @@ def test_layout_anchor_sync_loads_existing_e2e():
     parent_dir = root.mkdir("parent")
     nested_dir = parent_dir.mkdir("nested")
     nested_dir.touch("child.json").write_text('{"value_field": "existing_nested"}')
-    parent_dir.touch("child.json").write_text('{"value_field": "existing_direct"}')
+    parent_dir.touch("direct_child.json").write_text('{"value_field": "existing_direct"}')
     
     mounter = BaseMounter(root)
     tree = mounter.mount(ParentWorktree)
@@ -95,7 +95,7 @@ def test_layout_anchor_commit_persists_e2e():
     tree.commit()
     
     # Verify file contents
-    direct_data = json.loads(root.find("parent/child.json").read_text())
+    direct_data = json.loads(root.find("parent/direct_child.json").read_text())
     assert direct_data == {"value_field": "updated_direct"}
     
     nested_data = json.loads(root.find("parent/nested/child.json").read_text())
@@ -126,14 +126,14 @@ def test_worktree_with_nested_layouts_e2e():
     tree = mounter.mount(ThisThingWorktree)
     
     assert root.exists("this_thing")
-    assert root.exists("this_thing/a1.json")
+    assert root.exists("this_thing/artifact1.json")
     assert root.exists("this_thing/baz")
     assert root.exists("this_thing/baz/x")
     assert root.exists("this_thing/baz/y")
     assert root.exists("this_thing/baz/y/a")
     assert root.exists("this_thing/baz/y/b")
     assert root.exists("this_thing/foobar")
-    assert root.exists("this_thing/foobar/a2.json")
+    assert root.exists("this_thing/foobar/artifact2.json")
     
     assert tree.this_thing.artifact1.val == "v1"
     assert tree.this_thing.foobar.artifact2.val == "v2"

@@ -69,3 +69,5 @@ def test_pydantic_artifact_validation_error_e2e():
 # test_pydantic_artifact_unreachable_collection_methods cannot be duplicated in the E2E suite
 # because collection lifecycle methods are only called internal to the WorktreeItem sync
 # and are not reachable/applicable via the public Worktree/Mounter interface.
+
+

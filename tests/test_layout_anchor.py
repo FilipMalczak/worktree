@@ -10,7 +10,6 @@ from worktree.decorators import UnreachableWorktreeAction
 
 
 class ChildArtifact(PydanticArtifact):
-    mount_path = "child.json"
     value_field: str = "default_val"
 
 
@@ -61,7 +60,7 @@ def test_nested_layout_anchors():
     assert root.exists("parent_dir")
     assert root.exists("parent_dir/nested")
     assert root.exists("parent_dir/nested/child.json")
-    assert root.exists("parent_dir/child.json")
+    assert root.exists("parent_dir/direct_child.json")
     
     assert parent.direct_child.value_field == "default_val"
     assert parent.nested.child.value_field == "default_val"
@@ -75,7 +74,7 @@ def test_layout_anchor_sync_loads_existing():
     parent_dir = root.mkdir("parent_dir")
     nested_dir = parent_dir.mkdir("nested")
     nested_dir.touch("child.json").write_text('{"value_field": "existing_nested"}')
-    parent_dir.touch("child.json").write_text('{"value_field": "existing_direct"}')
+    parent_dir.touch("direct_child.json").write_text('{"value_field": "existing_direct"}')
     
     parent = ParentLayout("parent_dir", root)
     parent.sync()
@@ -97,7 +96,7 @@ def test_layout_anchor_commit_persists():
     parent.commit()
     
     # Verify file contents
-    direct_data = json.loads(root.find("parent_dir/child.json").read_text())
+    direct_data = json.loads(root.find("parent_dir/direct_child.json").read_text())
     assert direct_data == {"value_field": "updated_direct"}
     
     nested_data = json.loads(root.find("parent_dir/nested/child.json").read_text())
@@ -139,12 +138,10 @@ def test_layout_anchor_unreachable_object_methods():
 
 
 class Artifact1(PydanticArtifact):
-    mount_path = "a1.json"
     val: str = "v1"
 
 
 class Artifact2(PydanticArtifact):
-    mount_path = "a2.json"
     val: str = "v2"
 
 
@@ -171,14 +168,14 @@ def test_deep_nesting_with_mixed_children():
     this_thing.sync()
     
     assert root.exists("this_thing")
-    assert root.exists("this_thing/a1.json")
+    assert root.exists("this_thing/artifact1.json")
     assert root.exists("this_thing/baz")
     assert root.exists("this_thing/baz/x")
     assert root.exists("this_thing/baz/y")
     assert root.exists("this_thing/baz/y/a")
     assert root.exists("this_thing/baz/y/b")
     assert root.exists("this_thing/foobar")
-    assert root.exists("this_thing/foobar/a2.json")
+    assert root.exists("this_thing/foobar/artifact2.json")
     
     assert this_thing.artifact1.val == "v1"
     assert this_thing.foobar.artifact2.val == "v2"

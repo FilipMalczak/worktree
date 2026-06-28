@@ -14,7 +14,6 @@ from worktree.impl.accessibility.filesystem import FilesystemMountDriver
 
 # Define an artifact mapping to a JSON object
 class Counter(PydanticArtifact):
-    mount_path = "counter.json"
     number: int = 0
 
 # Define a worktree containing the artifact
@@ -81,12 +80,10 @@ from worktree.impl.accessibility.filesystem import FilesystemMountDriver
 
 # Define artifacts
 class DatabaseConfig(PydanticArtifact):
-    mount_path = "db.json"
     host: str = "localhost"
     port: int = 5432
 
 class ServerConfig(PydanticArtifact):
-    mount_path = "server.json"
     debug: bool = False
 
 # Define a layout with nested layouts and artifacts

@@ -93,6 +93,12 @@ class BaseWorktreeItem(Syncable):
 class Artifact[Value](BaseWorktreeItem):
     """
     In-memory piece of persistent data.
+
+    Advice for implementors:
+    If the implementation chooses to expose the singular mount path of the artifact,
+    it should do so via a property or field named `artifact_mount_path`.
+    If there's more than one object that the artifact maps to, use `<specialization>_mount_path`
+    convention.
     """
     @not_implemented
     def value(self) -> Value: ...
