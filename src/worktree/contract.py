@@ -10,10 +10,23 @@ from worktree.decorators import not_implemented, unreachable_worktree_action
 #todo better name for this module (its not just a contract anymore)
 
 
+class MissingInitialStateError(Exception):
+    """
+    Raised when a worktree item is missing initial state configuration during mounting.
+    """
+    def __init__(self, item_name: str, message: str):
+        self.item_name = item_name
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"Worktree item '{self.item_name}' is missing required initial state: {self.message}"
+
+
 class BaseWorktreeItem(Syncable):
-    def __init__(self, item_name: str, mounted_at: RootCollection):
+    def __init__(self, item_name: str, mounted_at: RootCollection, initial_states: Any | None = None):
         self._mounted_at = mounted_at
         self._item_name = item_name
+        self._initial_states = initial_states
 
     @property
     def item_name(self) -> str:
@@ -121,8 +134,8 @@ class LayoutAnchor(Anchor[Collection]):
     Can be used bare (empty directory stub) or subclassed (with children).
     """
 
-    def __init__(self, item_name: str, mounted_at: RootCollection):
-        super().__init__(item_name, mounted_at)
+    def __init__(self, item_name: str, mounted_at: RootCollection, initial_states: dict[str, Any] | None = None):
+        super().__init__(item_name, mounted_at, initial_states=initial_states)
         self._items: dict = {}
         self._collection: Collection | None = None
 
@@ -144,23 +157,38 @@ class LayoutAnchor(Anchor[Collection]):
         if self._items:
             return
         for field in get_worktree_items(type(self)):
-            if issubclass(field.t, Worktree):
-                wt_coll = collection.find_collection(field.name)
-                if not wt_coll:
-                    wt_coll = collection.mkdir(field.name)
-                value = field.t(wt_coll)
-              # Prefer match statement over if where applicable:
-              # "Prefer `match` statements over `ifs`. Rule of thumb: if you're using `elif`, you should be using `match` instead; otherwise, you're good."
-              # Since there's no `elif` here, a simple `if` is fine.
-            else:
-                value = field.t(field.name, collection)
+            child_initial = None
+            if self._initial_states and isinstance(self._initial_states, dict):
+                child_initial = self._initial_states.get(field.name)
+
+            try:
+                if issubclass(field.t, Worktree):
+                    wt_coll = collection.find_collection(field.name)
+                    if not wt_coll:
+                        wt_coll = collection.mkdir(field.name)
+                    value = field.t(wt_coll, initial_states=child_initial)
+                else:
+                    value = field.t(field.name, collection, initial_states=child_initial)
+            except MissingInitialStateError as e:
+                e.item_name = f"{field.name}.{e.item_name}"
+                raise
+            except Exception as e:
+                raise MissingInitialStateError(
+                    item_name=field.name,
+                    message=f"Instantiation failed: {e}"
+                ) from e
+
             self._items[field] = value
             setattr(self, field.name, value)
 
     def sync(self):
         super().sync()  # ensures dir exists -> initialize/validate -> children mounted
-        for item in self._items.values():
-            item.sync()
+        for field, item in self._items.items():
+            try:
+                item.sync()
+            except MissingInitialStateError as e:
+                e.item_name = f"{field.name}.{e.item_name}"
+                raise
 
     def commit(self):
         for item in self._items.values():
@@ -195,21 +223,35 @@ class Worktree(Syncable):
     subtypes other than business ones (no specialized behavior expected).
     """
 
-    def __init__(self, root: RootCollection):
+    def __init__(self, root: RootCollection, initial_states: dict[str, Any] | None = None):
         values = {}
         def side_effect(field: TypedField):
             # todo
             # if tree.field is a dataclass/pydantic Field -> resolve default
             # if tree.field has a value at all -> use it as default
             value: WorktreeItem
-            if issubclass(field.t, Worktree):
-                worktree_path = field.name
-                worktree_collection = root.find_collection(worktree_path)
-                if not worktree_collection:
-                    worktree_collection = root.mkdir(worktree_path)
-                value = field.t(worktree_collection)
-            else:
-                value = field.t(field.name, root)
+            field_initial = None
+            if initial_states and isinstance(initial_states, dict):
+                field_initial = initial_states.get(field.name)
+
+            try:
+                if issubclass(field.t, Worktree):
+                    worktree_path = field.name
+                    worktree_collection = root.find_collection(worktree_path)
+                    if not worktree_collection:
+                        worktree_collection = root.mkdir(worktree_path)
+                    value = field.t(worktree_collection, initial_states=field_initial)
+                else:
+                    value = field.t(field.name, root, initial_states=field_initial)
+            except MissingInitialStateError as e:
+                e.item_name = f"{field.name}.{e.item_name}"
+                raise
+            except Exception as e:
+                raise MissingInitialStateError(
+                    item_name=field.name,
+                    message=f"Instantiation failed: {e}"
+                ) from e
+
             values[field] = value
             setattr(self, field.name, value)
         for field in get_worktree_items(type(self)):
@@ -217,8 +259,12 @@ class Worktree(Syncable):
         self._items = values
 
     def sync(self):
-        for item in self._items.values():
-            item.sync()
+        for field, item in self._items.items():
+            try:
+                item.sync()
+            except MissingInitialStateError as e:
+                e.item_name = f"{field.name}.{e.item_name}"
+                raise
 
     def commit(self):
         # fixme this is not really atomic

@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 from typing import Self
  
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, TypeAdapter, ValidationError
  
-from worktree.contract import Artifact
+from worktree.contract import Artifact, MissingInitialStateError
 from worktree.mounting.accessible import Collection, Object
 from worktree.mounting.claim import Claim, ObjectClaim
 from worktree.decorators import unreachable_worktree_action
@@ -25,16 +25,33 @@ class PydanticArtifact(BaseModel, Artifact[Self]):
           and initialized with defaults, which are then synchronized with the storage back-end.
     """
  
-    def __init__(self, item_name: str, mounted_at: Collection | None = None, **kwargs):
+    def __init__(
+        self,
+        item_name: str,
+        mounted_at: Collection | None = None,
+        initial_states: dict | None = None,
+        **kwargs
+    ):
         """
         Initialize the Pydantic model and register it within the worktree collection.
  
         Accepts arbitrary keyword arguments for Pydantic cooperative inheritance validation and model reconstruction.
         """
-        BaseModel.__init__(self, **kwargs)
+        pydantic_kwargs = initial_states or {}
+        try:
+            BaseModel.__init__(self, **{**pydantic_kwargs, **kwargs})
+        except ValidationError as e:
+            missing_fields = [err["loc"][0] for err in e.errors() if err["type"] == "missing"]
+            if missing_fields:
+                missing_str = ", ".join(str(f) for f in missing_fields)
+                raise MissingInitialStateError(
+                    item_name=str(missing_fields[0]),
+                    message=f"Missing required fields: {missing_str}"
+                ) from e
+            raise
         self._item_name = item_name
         if mounted_at is not None:
-            Artifact.__init__(self, item_name, mounted_at)
+            Artifact.__init__(self, item_name, mounted_at, initial_states=initial_states)
 
     # TODO: Set up subclass post-init to decorate initialize_object, validate_object, and commit_object
     #  to dynamically assert that they are called with a path matching the owned claims.
